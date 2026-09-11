@@ -108,7 +108,13 @@ git clone https://github.com/hndll56/Spotify-Lyric-To-Lcd-l2c.git
 cd Spotify-Lyric-To-Lcd-l2c
 ```
 
-### 2. Create and activate a virtual environment
+### 2. Choose a Python environment
+
+There are two supported ways to run the application. Choose one.
+
+#### Option A — Use a virtual environment (recommended)
+
+A virtual environment keeps this project's Python packages separate from other projects and from the system Python installation.
 
 ```powershell
 python -m venv .venv
@@ -121,14 +127,34 @@ If PowerShell blocks script activation, run the following in Command Prompt inst
 .venv\Scripts\activate.bat
 ```
 
-### 3. Install Python dependencies
+Install the dependencies inside the virtual environment:
 
 ```powershell
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Install the Arduino library
+Run the application:
+
+```powershell
+python main.py
+```
+
+When the terminal shows `(.venv)`, the virtual environment is active.
+
+#### Option B — Run directly with the system Python
+
+A virtual environment is optional. You can install the dependencies into your normal Python installation and run the application directly.
+
+```powershell
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python main.py
+```
+
+Use this option only if you are comfortable sharing these packages with other Python projects on the computer. If you get `ModuleNotFoundError`, install the dependencies again using the same Python command that will run the application.
+
+### 3. Install the Arduino library
 
 1. Open Arduino IDE.
 2. Open **Sketch > Include Library > Manage Libraries**.
@@ -138,7 +164,7 @@ pip install -r requirements.txt
 6. Confirm the LCD I2C address.
 7. Upload the sketch.
 
-### 5. Configure the application
+### 4. Configure the application
 
 Copy the example configuration:
 
@@ -174,8 +200,9 @@ Use the port that belongs to the Arduino, for example `COM3` or `COM5`.
 1. Connect the Arduino and LCD.
 2. Close Arduino Serial Monitor or other programs using the Arduino COM port.
 3. Open Spotify Desktop and play a song.
-4. Activate the virtual environment.
-5. Run the program from the repository root:
+4. Open a terminal in the repository root.
+5. If using Option A, activate `.venv` first.
+6. Run the program:
 
 ```powershell
 python main.py
@@ -212,7 +239,7 @@ Manually added LRC files can use this format:
 [00:21.020]Third lyric line
 ```
 
-The cache is local and downloaded `.lrc` files are excluded from Git by `.gitignore`.
+The cache is local and downloaded `.lrc` files are excluded by `.gitignore`.
 
 ## Serial Protocol
 
@@ -228,11 +255,24 @@ The Arduino firmware receives the line and formats it for the 16x2 LCD.
 
 ### `ModuleNotFoundError`
 
-Make sure the virtual environment is active and reinstall dependencies:
+Make sure the dependencies are installed for the Python interpreter being used:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
+
+If using a virtual environment, activate it first. If running directly, do not use a different Python installation's `pip` command.
+
+### `WinError 5: Access is denied: 'lyrics'`
+
+Run the application from the repository root rather than opening `main.py` from an unrelated working directory in File Explorer:
+
+```powershell
+cd C:\path\to\Spotify-Lyric-To-Lcd-l2c
+python main.py
+```
+
+The `lyrics` folder is used as the local lyric cache. Make sure it exists and is writable.
 
 ### Arduino cannot connect
 
