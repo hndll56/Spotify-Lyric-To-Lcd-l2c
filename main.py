@@ -8,7 +8,11 @@ from pathlib import Path
 
 import requests
 import serial
-import winrt.windows.media.control as media_control
+
+try:
+    import winrt.windows.media.control as media_control
+except ImportError:
+    media_control = None
 
 
 # ============================================================
@@ -16,7 +20,7 @@ import winrt.windows.media.control as media_control
 # ============================================================
 
 PORT = os.getenv("SERIAL_PORT", "COM5")
-BAUDRATE = int(os.getenv("SERIAL_BAUDRATE", "115200"))
+BAUDRATE = int(os.getenv("BAUD_RATE", "115200"))
 LYRICS_FOLDER = Path(os.getenv("LYRICS_FOLDER", "lyrics"))
 
 CHECK_SONG_INTERVAL = 0.5
@@ -135,6 +139,10 @@ def parse_lrc(text):
 # ============================================================
 
 async def get_session():
+    if media_control is None:
+        print("[SESSION ERROR] Windows Media Control hanya tersedia di Windows.")
+        return None, "", ""
+
     try:
         manager_class = getattr(
             media_control, "GlobalSystemMediaTransportControlsSessionManager"
