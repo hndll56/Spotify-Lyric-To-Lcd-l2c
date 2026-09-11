@@ -1,0 +1,6 @@
+winrt-runtime
+winrt-Windows.Foundation
+winrt-Windows.Media
+winrt-Windows.Media.Control
+pyserial
+requests

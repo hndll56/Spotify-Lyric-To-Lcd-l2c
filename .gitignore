@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+.env
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Arduino
+arduino/*.hex
+arduino/*.elf
+arduino/*.eep
+arduino/*.bin
+arduino/*.uf2
+
+# Logs
+*.log
+
+# Cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# Local config (copy to .env.local and fill in)
+.env
+.env.local
+.env.*.local
