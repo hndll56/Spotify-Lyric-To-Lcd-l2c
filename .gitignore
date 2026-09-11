@@ -7,12 +7,12 @@ __pycache__/
 venv/
 .venv/
 env/
-.env
-
-# Virtual environment
-.venv/
-venv/
 ENV/
+
+# Environment and local configuration
+.env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
@@ -27,22 +27,19 @@ ehthumbs.db
 Desktop.ini
 .DS_Store
 
-# Arduino
+# Arduino build artifacts
 arduino/*.hex
 arduino/*.elf
 arduino/*.eep
 arduino/*.bin
 arduino/*.uf2
 
-# Logs
+# Logs and caches
 *.log
-
-# Cache
 .cache/
 .pytest_cache/
 .mypy_cache/
 
-# Local config (copy to .env.local and fill in)
-.env
-.env.local
-.env.*.local
+# Downloaded lyric cache
+lyrics/*.lrc
+!lyrics/.gitkeep

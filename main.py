@@ -32,12 +32,12 @@ LYRICS_OVH_URL = "https://api.lyrics.ovh/v1"
 # ============================================================
 # ICON INSTRUMENTAL
 # ============================================================
-# Byte 0x01 dikirim mentah ke Arduino. Selama sketch Arduino
-# memanggil lcd.createChar(1, ...) untuk mendaftarkan bitmap
-# not musik di slot custom-char 1, karakter LiquidCrystal akan
-# otomatis menampilkan ikon not musik saat menerima byte ini
-# (lihat catatan Arduino yang disertakan bersama patch ini).
-NOTE_ICON = "\x01"
+# Sketch Arduino kamu mengecek teks literal "INSTRUMENTAL"
+# (lihat setNewLyric() di .ino) untuk menampilkan ikon not
+# musik lewat custom char slot 0. Jadi Python cukup mengirim
+# string ini, bukan byte mentah - tidak perlu ubah apa pun di
+# sketch Arduino.
+NOTE_ICON = "INSTRUMENTAL"
 
 
 # ============================================================

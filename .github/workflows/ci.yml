@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: .
+
+jobs:
+  python-check:
+    name: Check Python
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install portable Python dependencies
+        run: python -m pip install --upgrade pip requests pyserial pytest ruff
+
+      - name: Compile Python files
+        run: python -m compileall -q .
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Check code style
+        run: ruff check main.py tests
+
+  arduino-check:
+    name: Check Arduino
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Update Arduino CLI index
+        run: arduino-cli core update-index
+
+      - name: Install Arduino AVR core
+        run: arduino-cli core install arduino:avr
+
+      - name: Install LCD library
+        run: arduino-cli lib install 'LiquidCrystal I2C'
+
+      - name: Compile Arduino sketch
+        run: arduino-cli compile --fqbn arduino:avr:uno arduino/lcd_display
