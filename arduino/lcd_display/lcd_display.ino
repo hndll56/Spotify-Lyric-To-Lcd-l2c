@@ -205,7 +205,7 @@ void showInstrumental() {
   // Baris 1
   lcd.setCursor(0, 0);
 
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < 8; i++) {
     lcd.write(byte(0));
     lcd.print(" ");
   }
