@@ -144,9 +144,7 @@ async def get_session():
         return None, "", ""
 
     try:
-        manager_class = getattr(
-            media_control, "GlobalSystemMediaTransportControlsSessionManager"
-        )
+        manager_class = media_control.GlobalSystemMediaTransportControlsSessionManager
         manager = await manager_class.request_async()
 
         for session in manager.get_sessions():
@@ -159,10 +157,11 @@ async def get_session():
                 artist = properties.artist or ""
                 if title.strip():
                     return session, title, artist
-            except Exception:
+            except Exception as exc:  # noqa: BLE001, S112
+                print("[SESSION WARNING] Gagal membaca media session:", exc)
                 continue
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         print("[SESSION ERROR]", exc)
 
     return None, "", ""
@@ -186,7 +185,7 @@ async def get_position(session):
                 position += elapsed
 
         return position
-    except Exception:
+    except Exception:  # noqa: BLE001
         return 0.0
 
 
