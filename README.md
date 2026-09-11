@@ -111,6 +111,20 @@ requirements.txt
 .env.example
 ```
 
+## Credits
+
+Proyek ini menggunakan dan terinspirasi oleh beberapa proyek open-source berikut:
+
+- [LRCLIB](https://lrclib.net) — Menyediakan data lirik tersinkronisasi.
+- [pywinrt](https://github.com/pywinrt/pywinrt) — Mengakses Windows Runtime dan Windows Media Session.
+- [LiquidCrystal_I2C](https://github.com/johnrickman/LiquidCrystal_I2C) — Library untuk mengontrol LCD I2C Arduino.
+- Spotify Desktop — Sumber informasi lagu dan media yang sedang diputar.
+- Windows Media Session API — Mengambil informasi lagu yang sedang aktif di Windows.
+
+### Special Thanks
+
+Terima kasih kepada para pengembang dan kontributor proyek open-source yang telah menyediakan library, API, dan dokumentasi yang digunakan dalam proyek ini.
+
 ## Lisensi
 
 MIT License. Lihat file `LICENSE`.
