@@ -2,62 +2,61 @@
 
 A Windows-based Python and Arduino project that displays synchronized lyrics from Spotify Desktop on a 16x2 I2C LCD.
 
-## Overview
-
-Spotify Lyric To LCD connects Spotify Desktop, Windows Media Session, Python, and an Arduino-powered LCD. The Python application detects the currently playing song, loads synchronized lyrics from a local cache or LRCLIB, and sends the active lyric line to Arduino through USB Serial. The Arduino displays the text on a 16x2 I2C LCD with automatic scrolling for long lines.
-
 ## Features
 
-- Detects the active Spotify Desktop session through Windows Media Session API.
-- Supports timestamped LRC lyrics.
-- Uses a local `lyrics/` cache to avoid downloading the same lyrics repeatedly.
-- Falls back to LRCLIB when a matching local lyric file is unavailable.
-- Calculates the current lyric from playback position.
-- Sends lyric text to Arduino over USB Serial.
-- Displays text on a 16x2 I2C LCD.
-- Includes instrumental-song handling and a custom music-note character.
+- Detects the active Spotify Desktop session through Windows Media Session.
+- Reads synchronized LRC lyrics from a local cache or LRCLIB.
+- Selects the lyric line according to the current playback position.
+- Sends lyric text to Arduino through USB Serial.
+- Displays long lines using LCD scrolling.
+- Handles instrumental songs and a music-note character.
 
-## System Architecture
+## How It Works
 
 ```text
 Spotify Desktop
       |
       v
-Windows Media Session API
+Windows Media Session
       |
       v
-Python Application
-      |
-      +--> Read artist and title
-      +--> Load cached LRC lyrics
-      +--> Fetch lyrics from LRCLIB if needed
-      +--> Parse timestamps and select active line
+Python application
+  |       |       |
+  |       |       +--> Parse LRC and select active line
+  |       +----------> Download/cache lyrics from LRCLIB
+  +------------------> Read artist, title, and playback position
       |
       v
 USB Serial
       |
       v
-Arduino Uno / Nano / Pro Micro
-      |
-      v
-LCD 1602 with I2C Backpack
+Arduino + LCD 1602 I2C
 ```
 
-## Hardware Requirements
+## Requirements
 
-| Component | Description |
-|---|---|
-| Arduino Uno, Nano, or Pro Micro | Microcontroller for the LCD display |
-| LCD 1602 with I2C backpack | 16 columns × 2 rows display, commonly using PCF8574 |
-| USB data cable | Power and serial communication between the computer and Arduino |
-| Jumper wires | Hardware connections |
-| Breadboard | Optional for prototyping |
+### Hardware
 
-## LCD I2C Wiring
+- Arduino Uno, Nano, or Pro Micro.
+- LCD 1602 with an I2C backpack, commonly PCF8574.
+- USB data cable.
+- Jumper wires and optionally a breadboard.
+
+### Software
+
+- Windows 10 or Windows 11.
+- Spotify Desktop application. Spotify Web Player is not supported by this project.
+- Python 3.10 or newer.
+- Arduino IDE.
+- Git, optional.
+
+The Python application requires Windows because it uses Windows Runtime Media Session APIs.
+
+## Wiring
 
 ### Arduino Uno / Nano
 
-| LCD I2C Pin | Arduino Pin |
+| LCD I2C | Arduino |
 |---|---|
 | VCC | 5V |
 | GND | GND |
@@ -66,35 +65,14 @@ LCD 1602 with I2C Backpack
 
 ### Arduino Pro Micro
 
-| LCD I2C Pin | Arduino Pin |
+| LCD I2C | Arduino |
 |---|---|
 | VCC | VCC / 5V |
 | GND | GND |
 | SDA | D2 |
 | SCL | D3 |
 
-### Wiring Diagram
-
-```text
-LCD I2C Backpack       Arduino Uno / Nano
-----------------       ------------------
-VCC  ----------------> 5V
-GND  ----------------> GND
-SDA  ----------------> A4
-SCL  ----------------> A5
-```
-
-The common LCD I2C address is `0x27`, although some modules use `0x3F`. If the display does not respond, use an I2C scanner to find the correct address and update the Arduino sketch if necessary.
-
-## Software Requirements
-
-- Windows 10 or Windows 11.
-- Spotify Desktop.
-- Python 3.10 or newer.
-- Arduino IDE.
-- Git (optional, for development).
-
-The Python component uses Windows Runtime Media Session APIs, so it requires Windows.
+The most common LCD addresses are `0x27` and `0x3F`. If the LCD is blank, use an I2C scanner and update the address in the Arduino sketch.
 
 ## Project Structure
 
@@ -107,163 +85,212 @@ Spotify-Lyric-To-Lcd-l2c/
 ├── requirements.txt
 ├── main.py
 ├── lyrics/
-│   └── *.lrc
-├── arduino/
-│   └── lcd_display/
-│       ├── lcd_display.ino
-│       └── .vscode/
-└── docs/
+│   └── .gitkeep
+└── arduino/
+    └── lcd_display/
+        └── lcd_display.ino
 ```
 
-### Main Files
-
-| File / Folder | Purpose |
+| Path | Purpose |
 |---|---|
-| `main.py` | Main Python application: Spotify monitoring, lyric retrieval, LRC parsing, timing, and serial output |
+| `main.py` | Spotify monitoring, lyric retrieval, timing, and serial output |
 | `lyrics/` | Local cache for downloaded or manually added `.lrc` files |
-| `arduino/lcd_display/lcd_display.ino` | Arduino firmware for receiving lyric text and controlling the LCD |
+| `arduino/lcd_display/lcd_display.ino` | Receives text and controls the LCD |
 | `requirements.txt` | Python dependencies |
-| `.env.example` | Example environment configuration template |
-
-## Python Dependencies
-
-Install the dependencies listed in `requirements.txt`:
-
-```powershell
-pip install -r requirements.txt
-```
-
-The project uses packages for:
-
-- Windows Runtime Media Session access through `winrt`.
-- HTTP requests through `requests`.
-- USB Serial communication through `pyserial`.
+| `.env.example` | Configuration template |
 
 ## Installation
 
-### 1. Clone the Repository
+### 1. Clone the repository
 
 ```powershell
 git clone https://github.com/hndll56/Spotify-Lyric-To-Lcd-l2c.git
 cd Spotify-Lyric-To-Lcd-l2c
 ```
 
-### 2. Create a Virtual Environment
+### 2. Create and activate a virtual environment
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
-### 3. Install Dependencies
+If PowerShell blocks script activation, run the following in Command Prompt instead:
+
+```cmd
+.venv\Scripts\activate.bat
+```
+
+### 3. Install Python dependencies
 
 ```powershell
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Upload the Arduino Firmware
+### 4. Install the Arduino library
 
 1. Open Arduino IDE.
-2. Open `arduino/lcd_display/lcd_display.ino`.
-3. Install the required `LiquidCrystal_I2C` library.
-4. Select the correct board and COM port.
-5. Confirm the LCD I2C address in the sketch.
-6. Upload the firmware.
+2. Open **Sketch > Include Library > Manage Libraries**.
+3. Search for and install `LiquidCrystal_I2C`.
+4. Open `arduino/lcd_display/lcd_display.ino`.
+5. Select the correct board and Arduino COM port.
+6. Confirm the LCD I2C address.
+7. Upload the sketch.
 
-## Configuration
+### 5. Configure the application
 
-Open `main.py` and adjust the serial configuration if necessary:
+Copy the example configuration:
 
-```python
-PORT = "COM5"
-BAUDRATE = 115200
+```powershell
+Copy-Item .env.example .env.local
 ```
 
-`PORT` must match the COM port assigned to the Arduino. The baud rate must be identical to the value used by `Serial.begin()` in the Arduino sketch.
+Edit `.env.local`:
 
-Other timing settings include:
-
-```python
-LYRICS_FOLDER = "lyrics"
-CHECK_SONG_INTERVAL = 0.5
-CHECK_POSITION_INTERVAL = 0.03
+```env
+SERIAL_PORT=COM5
+BAUD_RATE=115200
+LYRICS_FOLDER=lyrics
+LRCLIB_URL=https://lrclib.net/api/get
 ```
+
+Change `SERIAL_PORT` to the COM port assigned to your Arduino. The baud rate must match `Serial.begin()` in the Arduino sketch.
+
+Do not commit `.env.local` to GitHub. It is ignored by `.gitignore`.
+
+## Find the Arduino COM Port
+
+Disconnect and reconnect the Arduino, then run:
+
+```powershell
+python -m serial.tools.list_ports
+```
+
+Use the port that belongs to the Arduino, for example `COM3` or `COM5`.
 
 ## Running the Application
 
-1. Connect the Arduino to the computer.
-2. Make sure the LCD is wired correctly.
+1. Connect the Arduino and LCD.
+2. Close Arduino Serial Monitor or other programs using the Arduino COM port.
 3. Open Spotify Desktop and play a song.
-4. Activate the Python virtual environment.
-5. Run the application from the repository root:
+4. Activate the virtual environment.
+5. Run the program from the repository root:
 
 ```powershell
 python main.py
 ```
 
-The program will monitor the active Spotify session, retrieve or load synchronized lyrics, and send the current lyric line to the Arduino.
+The program will display status messages in the terminal while sending the current lyric line to the LCD.
 
-## How Lyrics Are Managed
+## Configuration Reference
 
-When a new song is detected, the application:
+| Variable | Default | Description |
+|---|---|---|
+| `SERIAL_PORT` | `COM5` | Arduino serial port |
+| `BAUD_RATE` | `115200` | Serial communication speed |
+| `LYRICS_FOLDER` | `lyrics` | Local LRC cache directory |
+| `LRCLIB_URL` | LRCLIB API URL | Synchronized lyric provider |
 
-1. Normalizes the artist and title.
+If a variable is not defined, the application uses its default value.
+
+## Lyrics
+
+When a new song starts, the application:
+
+1. Reads the artist and title from Windows Media Session.
 2. Searches the `lyrics/` folder for a matching `.lrc` file.
-3. If no local file is found, requests synchronized lyrics from LRCLIB.
-4. Saves successfully retrieved lyrics to the local cache.
-5. Parses timestamped lines from the LRC file.
-6. Selects the line whose timestamp matches the current playback position.
+3. Requests synchronized lyrics from LRCLIB if no local file exists.
+4. Saves successful downloads to the local cache.
+5. Parses timestamps and chooses the active line.
 
-## LRC File Format
-
-Lyrics can also be added manually to the `lyrics/` folder.
-
-Example:
+Manually added LRC files can use this format:
 
 ```text
-[00:12.34]First lyric line
-[00:16.78]Second lyric line
-[00:21.02]Third lyric line
+[00:12.340]First lyric line
+[00:16.780]Second lyric line
+[00:21.020]Third lyric line
 ```
 
-Supported timestamps use the format `[mm:ss.xx]` or `[mm:ss.xxx]`.
+The cache is local and downloaded `.lrc` files are excluded from Git by `.gitignore`.
 
-## Serial Communication
+## Serial Protocol
 
-The Python application sends UTF-8 text terminated by a newline character:
+Python sends one UTF-8 lyric line followed by a newline:
 
 ```text
 CURRENT_LYRIC\n
 ```
 
-The Arduino receives the lyric line and handles the LCD display formatting, including splitting long text into displayable chunks.
-
-## Display Behavior
-
-The LCD has a physical limit of 16 characters per line and two lines. Long lyrics are divided into chunks and displayed sequentially. The firmware also supports a music-note custom character and instrumental-song display behavior.
+The Arduino firmware receives the line and formats it for the 16x2 LCD.
 
 ## Troubleshooting
 
-| Problem | Possible Solution |
-|---|---|
-| Arduino cannot connect | Check the configured COM port and USB cable |
-| LCD is blank | Check VCC, GND, SDA, SCL, contrast, and I2C address |
-| Lyrics are not found | Check the song metadata, internet connection, or add an LRC file manually |
-| Spotify is not detected | Open Spotify Desktop and start playback |
-| Display is not synchronized | Confirm the Windows Media Session is reporting playback and position data |
+### `ModuleNotFoundError`
+
+Make sure the virtual environment is active and reinstall dependencies:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+### Arduino cannot connect
+
+- Confirm the USB cable supports data.
+- Check the COM port in `.env.local`.
+- Close Arduino Serial Monitor.
+- Check that the Arduino is visible with `python -m serial.tools.list_ports`.
+- Confirm the baud rate matches the Arduino sketch.
+
+### LCD is blank
+
+- Check VCC and GND.
+- Check SDA and SCL wiring.
+- Adjust the LCD contrast potentiometer.
+- Run an I2C scanner.
+- Try address `0x27` or `0x3F` in the sketch.
+
+### Spotify is not detected
+
+- Use Spotify Desktop, not the Web Player.
+- Start playing a song before running `main.py`.
+- Make sure Spotify is not paused indefinitely.
+- Restart Spotify and the Python application if Windows Media Session does not update.
+
+### Lyrics are not found
+
+- Confirm the computer has internet access.
+- Check the artist and title metadata.
+- Some songs do not have synchronized lyrics on LRCLIB.
+- Add a matching `.lrc` file manually to the `lyrics/` folder.
+
+### Lyrics are out of sync
+
+Playback position is obtained from Windows Media Session and may vary slightly between updates. Pause, seek, and resume operations can introduce small timing differences.
 
 ## Security
 
-Do not commit API keys, passwords, or private credentials. Keep local secrets in `.env` and use `.env.example` only as a template.
+- Never commit API keys, passwords, tokens, or private credentials.
+- Keep personal configuration in `.env.local`.
+- Use `.env.example` only as a template.
+- Downloaded lyric cache files are ignored by Git.
+
+## Limitations
+
+- Windows is required for the current media-session implementation.
+- Spotify Desktop must expose the active media session.
+- Not every song has synchronized lyrics.
+- LCD output is limited by the 16x2 display size.
+- Automatic COM port detection is not currently implemented.
 
 ## Future Improvements
 
-- Improved word wrapping and scrolling controls.
-- More lyric providers and offline management tools.
 - Automatic Arduino COM port detection.
-- Additional display support such as OLED.
-- More accurate pause, resume, and seeking synchronization.
-- Configuration through a graphical user interface.
+- More accurate pause, resume, and seek synchronization.
+- Better word wrapping and scrolling controls.
+- Additional lyric providers.
+- GUI-based configuration.
+- OLED and other display support.
 
 ## License
 
