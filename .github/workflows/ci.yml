@@ -21,14 +21,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
-          cache: pip
+          python-version: '3.12'
 
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+      - name: Install portable Python dependencies
+        run: python -m pip install --upgrade pip requests pyserial
 
       - name: Compile Python files
-        run: python -m compileall -q main.py
+        run: python -m compileall -q .
 
   arduino-check:
     name: Check Arduino
