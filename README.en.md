@@ -76,7 +76,7 @@ Connect the Arduino, close Serial Monitor, open Spotify Desktop, start a song, a
 ## Troubleshooting
 
 - `ModuleNotFoundError`: activate `.venv` or install `requirements.txt`.
-- `WinError 5: Access is denied: 'lyrics'`: run the program from the repository root and ensure `lyrics` is a directory.
+- `WinError 5: Access is denied: 'lyrics'`: run the program from the repository root and ensure `lyrics/` is a writable directory.
 - Arduino connection failure: check the USB data cable, COM port, baud rate, and whether another program is using the port.
 - Spotify not detected: use Spotify Desktop, start playback, and restart Spotify if Windows Media Session is not updating.
 - Lyrics missing: check internet access or add a matching `.lrc` file to `lyrics/`.
@@ -90,6 +90,20 @@ arduino/lcd_display/lcd_display.ino
 requirements.txt
 .env.example
 ```
+
+## Credits
+
+This project uses and is inspired by the following open-source projects and technologies:
+
+- [LRCLIB](https://lrclib.net) — Provides synchronized lyrics data.
+- [pywinrt](https://github.com/pywinrt/pywinrt) — Provides access to Windows Runtime and Windows Media Session.
+- [LiquidCrystal_I2C](https://github.com/johnrickman/LiquidCrystal_I2C) — Arduino library for controlling I2C LCD displays.
+- Spotify Desktop — Source of the currently playing track and media information.
+- Windows Media Session API — Provides information about the active media session.
+
+### Special Thanks
+
+Thanks to the developers and contributors of the open-source projects, libraries, APIs, and documentation used in this project.
 
 ## License
 
