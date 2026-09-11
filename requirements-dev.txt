@@ -1,0 +1,4 @@
+pyserial
+requests
+pytest
+ruff
