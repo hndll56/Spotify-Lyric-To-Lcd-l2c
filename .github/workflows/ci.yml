@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONPATH: .
+
 jobs:
   python-check:
     name: Check Python
@@ -22,14 +25,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
 
-      - name: Install development dependencies
-        run: python -m pip install -r requirements-dev.txt
+      - name: Install portable Python dependencies
+        run: python -m pip install --upgrade pip requests pyserial pytest ruff
 
       - name: Compile Python files
-        run: python -m compileall -q main.py tests
+        run: python -m compileall -q .
 
       - name: Run tests
         run: pytest -q
