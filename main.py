@@ -62,6 +62,29 @@ NOTE_ICON = "INSTRUMENTAL"
 # mulai bangun kalimat dari kosong lagi".
 NEW_LINE_MARKER = "NEWLINE"
 
+# ------------------------------------------------------------
+# KOREKSI SINKRONISASI (kalau lirik terasa MENDAHULUI atau TELAT
+# dari lagu aslinya).
+#
+# Ini wajar terjadi berbeda-beda per lagu, karena file LRC di LRCLIB
+# itu hasil crowd-source -> tingkat presisi sync-nya beda-beda per
+# lagu (ada yang pas, ada yang timestamp-nya sedikit maju). Di luar
+# itu, perangkat audio (speaker Bluetooth, dsb) biasanya juga punya
+# delay sendiri yang bikin lirik terasa lebih "mendahului" suara asli
+# yang kamu dengar.
+#
+# - Kalau lirik SERING muncul lebih DULU dari suara -> isi angka
+#   POSITIF di MANUAL_SYNC_OFFSET (menunda kemunculan lirik).
+# - Kalau lirik TELAT -> isi angka NEGATIF (memajukan lirik).
+# Satuan detik. Coba mulai dari 0.3-0.5 kalau audio kamu lewat
+# Bluetooth (biasanya ada delay bawaan di situ).
+#
+# Selain itu, kalau file .lrc-nya sendiri punya baris "[offset:xxx]"
+# (dalam milidetik), itu otomatis ikut dipakai sebagai koreksi
+# tambahan di atas MANUAL_SYNC_OFFSET ini.
+# ------------------------------------------------------------
+MANUAL_SYNC_OFFSET = 0.0
+
 
 # ============================================================
 # SERIAL ARDUINO
@@ -361,9 +384,68 @@ def parse_lyrics(text):
         r"^\[(\d+):(\d+(?:\.\d+)?)\](.*)$"
     )
 
+    # Beberapa file .lrc punya baris metadata "[offset:xxx]" (dalam
+    # milidetik) yang menandakan koreksi sinkronisasi bawaan dari
+    # file itu sendiri. Kita baca kalau ada, lalu gabungkan dengan
+    # MANUAL_SYNC_OFFSET di bawah.
+    offset_pattern = re.compile(
+        r"^\[offset:\s*([+-]?\d+(?:\.\d+)?)\]",
+        re.IGNORECASE
+    )
+
+    # Beberapa penyedia lirik punya format "enhanced LRC" yang berisi
+    # timestamp PER KATA di dalam baris, contoh:
+    #   [00:12.34]nobody <00:12.55>knows <00:12.80>what <00:13.00>i see
+    # Kalau format ini ada, kita pakai timestamp aslinya -> kata akan
+    # muncul PERSIS mengikuti waktu di lagu (bukan estimasi lagi).
+    word_tag_pattern = re.compile(
+        r"<(\d+):(\d+(?:\.\d+)?)>"
+    )
+
+    def parse_word_level(line_start, content):
+        matches = list(word_tag_pattern.finditer(content))
+
+        if not matches:
+            return None
+
+        word_times = []
+
+        pre_text = content[:matches[0].start()].strip()
+
+        for word in pre_text.split():
+            word_times.append((line_start, word))
+
+        for i, tag in enumerate(matches):
+            minutes = int(tag.group(1))
+            seconds = float(tag.group(2))
+            word_timestamp = minutes * 60 + seconds
+
+            segment_end = (
+                matches[i + 1].start()
+                if i + 1 < len(matches)
+                else len(content)
+            )
+
+            segment_text = content[tag.end():segment_end].strip()
+
+            for word in segment_text.split():
+                word_times.append((word_timestamp, word))
+
+        return word_times if word_times else None
+
+    embedded_offset_seconds = 0.0
+
     has_timestamp = False
 
     for line in text.splitlines():
+
+        offset_match = offset_pattern.match(line)
+
+        if offset_match:
+            embedded_offset_seconds = (
+                float(offset_match.group(1)) / 1000.0
+            )
+            continue
 
         match = pattern.match(line)
 
@@ -374,15 +456,47 @@ def parse_lyrics(text):
 
         minutes = int(match.group(1))
         seconds = float(match.group(2))
-        lyric = match.group(3).strip()
+        raw_content = match.group(3)
 
         timestamp = minutes * 60 + seconds
 
+        word_times = parse_word_level(timestamp, raw_content)
+
+        # Teks polos (tanpa tag <mm:ss.xx>) tetap disimpan -> dipakai
+        # untuk word-wrap tampilan & deteksi baris kosong/instrumental.
+        plain_lyric = word_tag_pattern.sub("", raw_content).strip()
+
         result.append(
-            (timestamp, lyric)
+            (timestamp, plain_lyric, word_times)
         )
 
     if has_timestamp:
+
+        total_offset = embedded_offset_seconds + MANUAL_SYNC_OFFSET
+
+        if total_offset != 0.0:
+            adjusted_result = []
+
+            for timestamp, plain_lyric, word_times in result:
+
+                adjusted_word_times = None
+
+                if word_times:
+                    adjusted_word_times = [
+                        (max(t + total_offset, 0.0), word)
+                        for t, word in word_times
+                    ]
+
+                adjusted_result.append(
+                    (
+                        max(timestamp + total_offset, 0.0),
+                        plain_lyric,
+                        adjusted_word_times
+                    )
+                )
+
+            result = adjusted_result
+
         result.sort(key=lambda x: x[0])
         return result
 
@@ -402,10 +516,12 @@ def parse_lyrics(text):
         timestamp = index * PLAIN_LYRICS_INTERVAL
 
         result.append(
-            (timestamp, line)
+            (timestamp, line, None)
         )
 
     return result
+
+
 
 
 # ============================================================
@@ -528,21 +644,30 @@ def get_current_line_index(lyrics, position):
 
 def build_word_schedule(lyrics, index):
     """
-    File LRC hanya punya timestamp per baris (bukan per kata), jadi
-    kita harus mengira-ngira kapan tiap kata muncul.
+    Prioritas 1: kalau baris ini punya timestamp PER KATA asli (format
+    enhanced LRC, lihat parse_lyrics), pakai itu langsung -> kata
+    muncul PERSIS sesuai waktu di lagu, tidak ada estimasi/delay sama
+    sekali.
+
+    Prioritas 2 (fallback, dipakai untuk mayoritas file LRC biasa yang
+    cuma punya timestamp per BARIS): kita harus mengira-ngira kapan
+    tiap kata muncul, karena datanya memang tidak punya info itu.
 
     Pendekatan lama: bagi rata jarak-ke-baris-berikutnya ke semua
     kata -> kalau ada jeda diam sebelum baris berikutnya, kata jadi
     ikut disebar pelan dan terasa ketinggalan dari lagu aslinya.
 
-    Pendekatan baru: kata muncul dengan tempo tetap (BASE_WORD_TIME,
+    Pendekatan sekarang: kata muncul dengan tempo tetap (BASE_WORD_TIME,
     diperberat sedikit sesuai panjang kata) -> lebih mendekati tempo
     nyanyian asli dan terasa realtime. Sisa jarak ke baris berikutnya
     (kalau ada) jadi jeda diam menunggu, BUKAN ikut memperlambat
     kemunculan kata.
     """
 
-    line_start, line_text = lyrics[index]
+    line_start, line_text, word_times = lyrics[index]
+
+    if word_times:
+        return word_times
 
     words = line_text.split()
 
