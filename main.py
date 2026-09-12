@@ -18,10 +18,15 @@ import winrt.windows.media.control as media_control
 PORT = "COM5"
 BAUDRATE = 115200
 
-LYRICS_FOLDER = "lyrics"
+# FIX: pakai path absolut di sebelah file script ini, bukan folder
+# relatif "lyrics" yang tergantung dari mana perintah dijalankan.
+# Ini menghindari error "Access is denied" kalau script dijalankan
+# dari folder yang izin tulisnya dibatasi Windows/OneDrive/antivirus.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LYRICS_FOLDER = os.path.join(SCRIPT_DIR, "lyrics")
 
 CHECK_SONG_INTERVAL = 0.5
-CHECK_POSITION_INTERVAL = 0.03
+CHECK_POSITION_INTERVAL = 0.02  # dipercepat supaya lebih realtime
 
 # Interval tampilan untuk lirik tanpa timestamp
 PLAIN_LYRICS_INTERVAL = 3.0
@@ -29,15 +34,33 @@ PLAIN_LYRICS_INTERVAL = 3.0
 LRCLIB_URL = "https://lrclib.net/api/get"
 LYRICS_OVH_URL = "https://api.lyrics.ovh/v1"
 
-# ============================================================
-# ICON INSTRUMENTAL
-# ============================================================
-# Sketch Arduino kamu mengecek teks literal "INSTRUMENTAL"
-# (lihat setNewLyric() di .ino) untuk menampilkan ikon not
-# musik lewat custom char slot 0. Jadi Python cukup mengirim
-# string ini, bukan byte mentah - tidak perlu ubah apa pun di
-# sketch Arduino.
+# Dipakai sebagai durasi baris untuk baris TERAKHIR (tidak ada baris
+# berikutnya untuk dijadikan patokan jarak).
+FALLBACK_LINE_DURATION = 6.0
+
+# ------------------------------------------------------------
+# PENJADWALAN KATA (dibuat "seamless" & mengikuti tempo nyanyian,
+# bukan menyebar rata ke seluruh jeda sampai baris berikutnya)
+# ------------------------------------------------------------
+
+# Perkiraan waktu dasar per kata (detik) -> kira-kira tempo bicara/
+# nyanyi normal. Sebelumnya kata disebar rata ke SELURUH jarak
+# sampai baris berikutnya (termasuk jeda diam), sehingga terasa
+# lambat/ketinggalan dari lagu aslinya. Sekarang kata-kata langsung
+# tampil dengan tempo ini, lalu SISA jarak jadi jeda diam menunggu
+# baris berikutnya (bukan ikut memperlambat munculnya kata).
+# (Sempat dibuat 0.28 lalu dirasa terlalu cepat -> dinaikkan lagi.)
+BASE_WORD_TIME = 0.4
+
+# Batas bawah waktu per kata, supaya baris yang padat kata (jarak ke
+# baris berikutnya sempit) tetap selesai tampil tepat waktu.
+MIN_WORD_TIME = 0.18
+
 NOTE_ICON = "INSTRUMENTAL"
+
+# Penanda ke Arduino: "mulai baris lirik baru, bersihkan layar dan
+# mulai bangun kalimat dari kosong lagi".
+NEW_LINE_MARKER = "NEWLINE"
 
 
 # ============================================================
@@ -70,7 +93,16 @@ def normalize(text):
 
 def ensure_folder():
     if not os.path.exists(LYRICS_FOLDER):
-        os.makedirs(LYRICS_FOLDER)
+        try:
+            os.makedirs(LYRICS_FOLDER)
+        except Exception as e:
+            print(
+                "[ERROR] Gagal membuat folder lirik:",
+                LYRICS_FOLDER,
+                "-",
+                e
+            )
+            raise
 
 
 def get_cache_filename(artist, title, extension):
@@ -134,7 +166,6 @@ def get_lyrics_from_lrclib(artist, title):
 
         data = response.json()
 
-        # Prioritaskan syncedLyrics
         synced_lyrics = data.get("syncedLyrics")
 
         if synced_lyrics:
@@ -159,7 +190,6 @@ def get_lyrics_from_lrclib(artist, title):
 
             return synced_lyrics
 
-        # Jika tidak ada syncedLyrics, gunakan plainLyrics
         plain_lyrics = data.get("plainLyrics")
 
         if plain_lyrics:
@@ -204,7 +234,6 @@ def get_lyrics_from_lyrics_ovh(artist, title):
     print("[LYRICS.OVH] Mencari lirik...")
 
     try:
-        # quote() diperlukan agar judul/artis dengan spasi aman
         artist_encoded = quote(artist, safe="")
         title_encoded = quote(title, safe="")
 
@@ -272,18 +301,6 @@ def get_lyrics_from_lyrics_ovh(artist, title):
 # ============================================================
 
 def get_lyrics_from_databases(artist, title):
-    """
-    Urutan pencarian:
-
-    1. Cache lokal
-    2. LRCLIB
-    3. lyrics.ovh
-    """
-
-    # --------------------------------------------------------
-    # CACHE LOKAL
-    # --------------------------------------------------------
-
     local_file = find_local_lyrics(artist, title)
 
     if local_file:
@@ -300,10 +317,6 @@ def get_lyrics_from_databases(artist, title):
         except Exception as e:
             print("[CACHE ERROR]", e)
 
-    # --------------------------------------------------------
-    # DATABASE 1: LRCLIB
-    # --------------------------------------------------------
-
     print()
     print("[DATABASE 1/2] LRCLIB")
 
@@ -316,10 +329,6 @@ def get_lyrics_from_databases(artist, title):
         print("[SUCCESS] Lirik ditemukan dari LRCLIB.")
         return lyrics
 
-    # --------------------------------------------------------
-    # DATABASE 2: LYRICS.OVH
-    # --------------------------------------------------------
-
     print()
     print("[DATABASE 2/2] lyrics.ovh")
 
@@ -331,10 +340,6 @@ def get_lyrics_from_databases(artist, title):
     if lyrics:
         print("[SUCCESS] Lirik ditemukan dari lyrics.ovh.")
         return lyrics
-
-    # --------------------------------------------------------
-    # GAGAL
-    # --------------------------------------------------------
 
     print()
     print("[FAILED] Lirik tidak ditemukan di kedua database.")
@@ -351,10 +356,6 @@ def parse_lyrics(text):
 
     if not text:
         return result
-
-    # ========================================================
-    # PARSE LRC
-    # ========================================================
 
     pattern = re.compile(
         r"^\[(\d+):(\d+(?:\.\d+)?)\](.*)$"
@@ -385,10 +386,6 @@ def parse_lyrics(text):
         result.sort(key=lambda x: x[0])
         return result
 
-    # ========================================================
-    # PLAIN TEXT
-    # ========================================================
-
     plain_lines = []
 
     for line in text.splitlines():
@@ -400,8 +397,6 @@ def parse_lyrics(text):
 
         plain_lines.append(line)
 
-    # Karena lyrics.ovh tidak memiliki timestamp,
-    # buat timestamp buatan setiap 3 detik.
     for index, line in enumerate(plain_lines):
 
         timestamp = index * PLAIN_LYRICS_INTERVAL
@@ -457,11 +452,6 @@ async def get_session():
 # ============================================================
 
 async def get_position(session):
-    """
-    Posisi lagu diekstrapolasi berdasarkan waktu yang berlalu
-    sejak Windows terakhir kali melaporkan posisi.
-    """
-
     try:
         timeline = session.get_timeline_properties()
         playback_info = session.get_playback_info()
@@ -519,41 +509,78 @@ def send_to_arduino(text):
 
 
 # ============================================================
-# CARI LIRIK SESUAI POSISI
+# CARI INDEKS BARIS SESUAI POSISI
 # ============================================================
 
-def get_current_lyric(lyrics, position):
-    """
-    PATCH: bagian instrumental (belum ada lirik yang mulai, atau
-    baris lirik memang kosong seperti "[01:15.00]" tanpa teks -
-    penanda instrumental umum di file LRC) sekarang menampilkan
-    NOTE_ICON, bukan spasi kosong.
-    """
-
+def get_current_line_index(lyrics, position):
     if not lyrics:
-        return ""
+        return -1
 
-    timestamps = [
-        lyric[0]
-        for lyric in lyrics
-    ]
+    timestamps = [lyric[0] for lyric in lyrics]
 
-    index = bisect.bisect_right(
-        timestamps,
-        position
-    ) - 1
+    return bisect.bisect_right(timestamps, position) - 1
 
-    # Sebelum baris lirik pertama dimulai -> intro instrumental
-    if index < 0:
-        return NOTE_ICON
 
-    lyric_text = lyrics[index][1]
+# ============================================================
+# BUAT JADWAL KATA UNTUK SATU BARIS (REALTIME, BUKAN DIBAGI RATA
+# KE SELURUH JEDA SAMPAI BARIS BERIKUTNYA)
+# ============================================================
 
-    # Baris lirik kosong -> jeda/instrumental di tengah lagu
-    if lyric_text == "":
-        return NOTE_ICON
+def build_word_schedule(lyrics, index):
+    """
+    File LRC hanya punya timestamp per baris (bukan per kata), jadi
+    kita harus mengira-ngira kapan tiap kata muncul.
 
-    return lyric_text
+    Pendekatan lama: bagi rata jarak-ke-baris-berikutnya ke semua
+    kata -> kalau ada jeda diam sebelum baris berikutnya, kata jadi
+    ikut disebar pelan dan terasa ketinggalan dari lagu aslinya.
+
+    Pendekatan baru: kata muncul dengan tempo tetap (BASE_WORD_TIME,
+    diperberat sedikit sesuai panjang kata) -> lebih mendekati tempo
+    nyanyian asli dan terasa realtime. Sisa jarak ke baris berikutnya
+    (kalau ada) jadi jeda diam menunggu, BUKAN ikut memperlambat
+    kemunculan kata.
+    """
+
+    line_start, line_text = lyrics[index]
+
+    words = line_text.split()
+
+    if not words:
+        return []
+
+    if index + 1 < len(lyrics):
+        gap = lyrics[index + 1][0] - line_start
+    else:
+        gap = FALLBACK_LINE_DURATION
+
+    # Jangan sampai kurang dari batas bawah tiap kata, meskipun
+    # jarak ke baris berikutnya sangat sempit/negatif (data tidak rapi).
+    gap = max(gap, MIN_WORD_TIME * len(words))
+
+    # Bobot tiap kata berdasarkan panjang huruf, supaya kata panjang
+    # dapat porsi waktu sedikit lebih besar dari kata pendek.
+    weights = [max(len(word), 3) for word in words]
+    total_weight = sum(weights)
+
+    estimated_duration = BASE_WORD_TIME * len(words)
+
+    # Pakai yang lebih kecil: jangan lebih lambat dari tempo normal,
+    # tapi juga jangan lebih lama dari jarak nyata ke baris berikutnya.
+    duration = min(estimated_duration, gap)
+    duration = max(duration, MIN_WORD_TIME * len(words))
+
+    schedule = []
+    timestamp = line_start
+
+    for word, weight in zip(words, weights):
+        word_time = duration * (weight / total_weight)
+
+        schedule.append((timestamp, word))
+
+        timestamp += word_time
+
+    return schedule
 
 
 # ============================================================
@@ -561,13 +588,6 @@ def get_current_lyric(lyrics, position):
 # ============================================================
 
 def reset_state():
-    """
-    FIX: dipanggil saat sesi media hilang (Spotify berhenti/
-    ditutup/berpindah ke app lain tanpa media). Sebelumnya
-    status lama (sesi, lagu, lirik) tidak pernah dibersihkan,
-    jadi LCD bisa menampilkan lirik basi dari lagu sebelumnya.
-    """
-
     send_to_arduino("Menunggu lagu...")
 
     return None, "", [], None
@@ -588,6 +608,19 @@ async def main():
 
     last_song_check = 0
     last_lyric = None
+
+    # Status khusus mode scroll (per-kata).
+    # PENTING: pakai None sebagai nilai awal (bukan -1), karena -1
+    # adalah nilai index yang VALID (artinya "sebelum lirik pertama
+    # / instrumental intro"). Kalau nilai awal ini juga -1, saat lagu
+    # baru dimulai dengan intro instrumental maka index pertama yang
+    # terdeteksi (-1) akan dianggap "tidak berubah" dari nilai awal,
+    # sehingga penanda INSTRUMENTAL tidak pernah terkirim dan layar
+    # nyangkut di "Mencari lirik...". Dengan None, perubahan index
+    # apa pun (termasuk ke -1) pasti terdeteksi sebagai baru.
+    current_line_index = None
+    word_schedule = []
+    word_pointer = 0
 
     while True:
 
@@ -615,10 +648,6 @@ async def main():
                         + normalize(title)
                     )
 
-                    # ------------------------------------------------
-                    # JIKA LAGU BERUBAH
-                    # ------------------------------------------------
-
                     if song_id != current_song:
 
                         current_session = session
@@ -626,6 +655,10 @@ async def main():
 
                         lyrics = []
                         last_lyric = None
+
+                        current_line_index = None
+                        word_schedule = []
+                        word_pointer = 0
 
                         print()
                         print("[SONG]", artist, "-", title)
@@ -652,13 +685,6 @@ async def main():
                                 "baris lirik dimuat."
                             )
 
-                            if lyrics:
-                                send_to_arduino(
-                                    lyrics[0][1]
-                                )
-
-                                last_lyric = lyrics[0][1]
-
                         else:
 
                             print("[INFO] Tidak ada lirik.")
@@ -668,13 +694,6 @@ async def main():
                             )
 
                 else:
-                    # ------------------------------------------------
-                    # FIX: tidak ada sesi media aktif sama sekali
-                    # (Spotify ditutup/berhenti/tidak ada apa pun yang
-                    # diputar). Bersihkan status lama supaya LCD tidak
-                    # nyangkut di lirik/lagu sebelumnya.
-                    # ------------------------------------------------
-
                     if current_session is not None:
 
                         print()
@@ -687,6 +706,10 @@ async def main():
                             last_lyric
                         ) = reset_state()
 
+                        current_line_index = None
+                        word_schedule = []
+                        word_pointer = 0
+
             # ====================================================
             # UPDATE LIRIK
             # ====================================================
@@ -697,25 +720,52 @@ async def main():
                     current_session
                 )
 
-                lyric = get_current_lyric(
-                    lyrics,
-                    position
-                )
+                index = get_current_line_index(lyrics, position)
 
-                if lyric != last_lyric:
+                # ------------------------------------------------
+                # BARIS BERGANTI -> SIAPKAN JADWAL KATA BARU
+                # ------------------------------------------------
 
-                    send_to_arduino(lyric)
+                if index != current_line_index:
 
-                    last_lyric = lyric
+                    current_line_index = index
+
+                    if index < 0 or lyrics[index][1] == "":
+                        # Intro sebelum lirik pertama, atau baris
+                        # kosong -> instrumental
+                        word_schedule = [(position, NOTE_ICON)]
+                    else:
+                        # Kirim penanda baris baru dulu supaya Arduino
+                        # bersihkan layar sebelum kata pertama datang
+                        send_to_arduino(NEW_LINE_MARKER)
+
+                        word_schedule = build_word_schedule(
+                            lyrics,
+                            index
+                        )
+
+                    word_pointer = 0
+
+                # ------------------------------------------------
+                # KIRIM KATA YANG JADWALNYA SUDAH LEWAT
+                # ------------------------------------------------
+
+                while (
+                    word_pointer < len(word_schedule)
+                    and position >= word_schedule[word_pointer][0]
+                ):
+
+                    word_to_send = word_schedule[word_pointer][1]
+
+                    send_to_arduino(word_to_send)
+
+                    word_pointer += 1
 
             await asyncio.sleep(
                 CHECK_POSITION_INTERVAL
             )
 
         except Exception as e:
-            # FIX: bungkus satu iterasi loop dengan try/except supaya
-            # error tak terduga (misal Arduino sempat lepas, atau
-            # exception dari winrt) tidak menghentikan seluruh program.
             print("[LOOP ERROR]", e)
             await asyncio.sleep(CHECK_POSITION_INTERVAL)
 
